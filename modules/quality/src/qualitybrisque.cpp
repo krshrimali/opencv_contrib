@@ -195,7 +195,7 @@ namespace
     }
 
     // float computescore(String imagename) {
-    double computescore( cv::Mat& orig ) {
+    double computescore( const cv::String& model_, const cv::String& range_, cv::Mat& orig ) {
         // pre-loaded vectors from allrange file 
         float min_[36] = { 0.336999 ,0.019667 ,0.230000 ,-0.125959 ,0.000167 ,0.000616 ,0.231000 ,-0.125873 ,0.000165 ,0.000600 ,0.241000 ,-0.128814 ,0.000179 ,0.000386 ,0.243000 ,-0.133080 ,0.000182 ,0.000421 ,0.436998 ,0.016929 ,0.247000 ,-0.200231 ,0.000104 ,0.000834 ,0.257000 ,-0.200017 ,0.000112 ,0.000876 ,0.257000 ,-0.155072 ,0.000112 ,0.000356 ,0.258000 ,-0.154374 ,0.000117 ,0.000351 };
         float max_[36] = { 9.999411, 0.807472, 1.644021, 0.202917, 0.712384, 0.468672, 1.644021, 0.169548, 0.713132, 0.467896, 1.553016, 0.101368, 0.687324, 0.533087, 1.554016, 0.101000, 0.689177, 0.533133, 3.639918, 0.800955, 1.096995, 0.175286, 0.755547, 0.399270, 1.095995, 0.155928, 0.751488, 0.402398, 1.041992, 0.093209, 0.623516, 0.532925, 1.042992, 0.093714, 0.621958, 0.534484 };
@@ -209,6 +209,8 @@ namespace
         ComputeBrisqueFeature(orig, brisqueFeatures); // compute brisque features
 
         // use the pre-trained allmodel file
+
+        // TODO:  Use model and range parameters provided to this function instead
 
         String modelfile = "allmodel";
         if ((model = svm_load_model(modelfile.c_str())) == 0) {
@@ -243,7 +245,7 @@ namespace
     }
 
     // computes score and quality map for single frame
-    std::pair<cv::Scalar, _quality_map_type> compute( brisque_mat_type& img )
+    std::pair<cv::Scalar, _quality_map_type> compute( const cv::String& model, const cv::String& range, brisque_mat_type& img )
     {
         std::pair<cv::Scalar, _quality_map_type> result;
 
@@ -251,7 +253,7 @@ namespace
         //  place score in result.first, and quality map in result.second
 
         result.first = cv::Scalar{ 0. };
-        result.first[0] = computescore(img);  
+        result.first[0] = computescore( model, range, img);  
 
         // is there a quality map that can be generated?
 
@@ -259,7 +261,7 @@ namespace
     }
 
     // computes score and quality maps for multiple frames
-    cv::Scalar compute( std::vector<brisque_mat_type>& imgs, OutputArrayOfArrays qualityMaps )
+    cv::Scalar compute( const cv::String& model, const cv::String& range, std::vector<brisque_mat_type>& imgs, OutputArrayOfArrays qualityMaps )
     {
         CV_Assert(imgs.size() > 0);
 
@@ -267,9 +269,12 @@ namespace
         std::vector<_quality_map_type> quality_maps = {};
         const auto sz = imgs.size();
 
+        // future optimization:  convert model and range to libsvm types here instead of every time we compute for a frame
+        //  ideally, these would be created in the constructor so they are only created once per instantiation
+
         for (unsigned i = 0; i < sz; ++i)
         {
-            auto cmp = compute( imgs[i] );
+            auto cmp = compute( model, range, imgs[i] );
             cv::add(result, cmp.first, result);
 
             if ( qualityMaps.needed() )
@@ -291,26 +296,29 @@ namespace
 }
 
 // static
-Ptr<QualityBRISQUE> QualityBRISQUE::create()
+Ptr<QualityBRISQUE> QualityBRISQUE::create(cv::String model, cv::String range)
 {
-    return Ptr<QualityBRISQUE>(new QualityBRISQUE());
+    return Ptr<QualityBRISQUE>(new QualityBRISQUE( std::move(model), std::move(range)));
 }
 
 // static
-cv::Scalar QualityBRISQUE::compute(InputArrayOfArrays imgs, OutputArrayOfArrays qualityMaps)
+cv::Scalar QualityBRISQUE::compute( const cv::String& model, const cv::String& range, InputArrayOfArrays imgs, OutputArrayOfArrays qualityMaps)
 {
     auto vec = quality_utils::expand_mats<brisque_mat_type>(imgs);// convert inputarrayofarrays to vector of brisque_mat_type
-    return ::compute( vec, qualityMaps );
+    return ::compute(model, range, vec, qualityMaps);
 }
 
 // QualityBRISQUE() constructor
-QualityBRISQUE::QualityBRISQUE()
+QualityBRISQUE::QualityBRISQUE( cv::String model, cv::String range )
+    : _model(std::move(model))
+    , _range(std::move(range))
 {
-    // TODO:  Perform any initialization here, load the model file, etc.
+    // would be nice to convert the model/range strings to libsvm models
+    //  and store in a unique_ptr<void> with a custom deleter in the qualitybrisque object so we don't expose libsvm headers
 }
 
 cv::Scalar QualityBRISQUE::compute( InputArrayOfArrays imgs )
 {
     auto vec = quality_utils::expand_mats<brisque_mat_type>(imgs);// convert inputarrayofarrays to vector of brisque_mat_type
-    return ::compute( vec, this->_qualityMaps);
+    return ::compute( this->getModel(), this->getRange(), vec, this->_qualityMaps);
 }

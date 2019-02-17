@@ -27,24 +27,42 @@ public:
     /**
     @brief Create an object which calculates quality
     */
-    CV_WRAP static Ptr<QualityBRISQUE> create();
+    CV_WRAP static Ptr<QualityBRISQUE> create(cv::String model, cv::String range);
 
     /**
     @brief static method for computing quality
+    @param model cv::String containing BRISQUE calculation model
+    @param range cv::String containing BRISQUE calculation range
     @param imgs image(s) for which to compute quality
     @param qualityMaps output quality map(s), or cv::noArray()  TODO:  remove this parameter if algorithm doesn't generate output quality maps
     @returns TODO:  describe the resulting cv::Scalar
     */
-    CV_WRAP static cv::Scalar compute( InputArrayOfArrays imgs, OutputArrayOfArrays qualityMaps );
+    CV_WRAP static cv::Scalar compute( const cv::String& model, const cv::String& range, InputArrayOfArrays imgs, OutputArrayOfArrays qualityMaps );
+
+    /** @brief return the model used for computation */
+    CV_WRAP const cv::String& getModel() const { return _model; }
+
+    /** @brief sets the model used for computation */
+    CV_WRAP void setModel( cv::String val ) { this->_model = std::move(val); }
+
+    /** @brief return the range used for computation */
+    CV_WRAP const cv::String& getRange() const { return _range; }
+
+    /** @brief sets the range used for computation */
+    CV_WRAP void setRange(cv::String val) { this->_range = std::move(val); }
 
 protected:
 
     /**
     @brief Constructor
     */
-    QualityBRISQUE();
+    QualityBRISQUE( cv::String model, cv::String range );
 
-    // TODO:  Add any protected members here
+    /** @brief BRISQUE model string */
+    cv::String _model;
+
+    /** @brief BRISQUE range string */
+    cv::String _range;
 
 };  // QualityBRISQUE
 }   // quality
