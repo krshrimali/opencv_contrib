@@ -12,10 +12,10 @@ namespace quality_test
 {
 
 // brisque per channel
-// TODO:  compute test file values via original brisque impl
+// computed test file values via original brisque impl, libsvm 318, opencv 2.x
 const cv::Scalar
-    BRISQUE_EXPECTED_1 = { 0. }  // testfile_1a
-    , BRISQUE_EXPECTED_2 = { 0. }  // testfile_2a
+    BRISQUE_EXPECTED_1 = { 31.155 }  // testfile_1a
+    , BRISQUE_EXPECTED_2 = { 15.4114 }  // testfile_2a
 ;
 
 // static method
