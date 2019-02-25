@@ -42,8 +42,14 @@ namespace
     using namespace cv;
     using namespace cv::quality;
 
-    // type of mat we're working with internally; use cv::Mat for debugging
-    using brisque_mat_type = cv::UMat;
+    // type of mat we're working with internally
+    using brisque_mat_type = cv::Mat;
+
+    // brisque intermediate calculation type
+    static constexpr const int BRISQUE_CALC_MAT_TYPE = CV_32F;
+
+    // brisque intermediate matrix element type
+    using brique_calc_element_type = float;
 
     // handles loading/unloading/storage of brisque svm data
     struct brisque_svm_data
@@ -103,6 +109,9 @@ namespace
         }
     };
 
+    uchar* get_data(const cv::Mat& mat) { return mat.data; }
+    uchar* get_data(const cv::UMat& mat) { return get_data(mat.getMat(cv::ACCESS_READ)); }
+
     template<class T> class Image {
     private:
         brisque_mat_type imgP;
@@ -117,13 +126,15 @@ namespace
             img = imgP.clone();
             return img;
         }
+
         inline T* operator[](const int rowIndx) {
-            return (T*)(imgP.getMat(ACCESS_READ).data + rowIndx * imgP.step);   // UMat version
+            // return (T*)(imgP.getMat(ACCESS_READ).data + rowIndx * imgP.step);   // UMat version
             // return (T*)(imgP.data + rowIndx * imgP.step);    // Mat version
+            return (T*)(get_data(imgP) + rowIndx * imgP.step);
         }
     };
 
-    typedef Image<double> BwImage;
+    typedef Image<brique_calc_element_type> BwImage;
 
     // function to compute best fit parameters from AGGDfit 
     brisque_mat_type AGGDfit(brisque_mat_type structdis, double& lsigma_best, double& rsigma_best, double& gamma_best)
@@ -179,18 +190,10 @@ namespace
 
     void ComputeBrisqueFeature(brisque_mat_type& orig, std::vector<double>& featurevector)
     {
-        brisque_mat_type orig_bw_int(orig.size(), CV_64F, 1);
-        // convert to grayscale 
-        if (orig.channels() != 1)
-            cv::cvtColor(orig, orig_bw_int, cv::COLOR_BGR2GRAY);
-        else
-            orig_bw_int = orig;
+        CV_Assert(orig.channels() == 1);
 
-        // create a copy of original image
-        brisque_mat_type orig_bw(orig_bw_int.size(), CV_64FC1, 1);
-        orig_bw_int.convertTo(orig_bw, CV_64FC1, 1.0 / 255.0);
-        orig_bw_int.release();
-
+        auto orig_bw = orig;
+        
         // orig_bw now contains the grayscale image normalized to the range 0,1
         int scalenum = 2; // number of times to scale the image
         for (int itr_scale = 1; itr_scale <= scalenum; itr_scale++)
@@ -202,14 +205,14 @@ namespace
 
             // calculating MSCN coefficients
             // compute mu (local mean)
-            brisque_mat_type mu(imdist_scaled.size(), CV_64FC1, 1);
+            brisque_mat_type mu;//  (imdist_scaled.size(), CV_64FC1, 1);
             cv::GaussianBlur(imdist_scaled, mu, cv::Size(7, 7), 1.16666, 0., cv::BORDER_REPLICATE );
 
             brisque_mat_type mu_sq;
             cv::pow(mu, double(2.0), mu_sq);
 
             //compute sigma (local sigma)
-            brisque_mat_type sigma(imdist_scaled.size(), CV_64FC1, 1);
+            brisque_mat_type sigma;// (imdist_scaled.size(), CV_64FC1, 1);
             cv::multiply(imdist_scaled, imdist_scaled, sigma);
 
             cv::GaussianBlur(sigma, sigma, cv::Size(7, 7), 1.16666, 0., cv::BORDER_REPLICATE );
@@ -218,7 +221,7 @@ namespace
             cv::pow(sigma, double(0.5), sigma);
             cv::add(sigma, Scalar(1.0 / 255), sigma); // to avoid DivideByZero Error
 
-            brisque_mat_type structdis(imdist_scaled.size(), CV_64FC1, 1);
+            brisque_mat_type structdis;// (imdist_scaled.size(), CV_64FC1, 1);
             cv::subtract(imdist_scaled, mu, structdis);
             cv::divide(structdis, sigma, structdis);  // structdis is MSCN image
 
@@ -238,8 +241,8 @@ namespace
                 // select the shifting index from the 2D array
                 int* reqshift = shifts[itr_shift - 1];
 
-                // declare shifted_structdis as pairwise image
-                brisque_mat_type shifted_structdis(imdist_scaled.size(), CV_64F, 1);
+                // declare, create shifted_structdis as pairwise image
+                brisque_mat_type shifted_structdis(imdist_scaled.size(), BRISQUE_CALC_MAT_TYPE); //(imdist_scaled.size(), CV_64FC1, 1);
 
                 // create copies of the images using BwImage constructor
                 // utility constructor for better subscript access (for pixels)
@@ -402,6 +405,28 @@ QualityBRISQUE::QualityBRISQUE(const cv::String& model_file_path, const cv::Stri
 cv::Scalar QualityBRISQUE::compute(InputArrayOfArrays imgs)
 {
     auto vec = quality_utils::expand_mats<brisque_mat_type>(imgs);// convert inputarrayofarrays to vector of brisque_mat_type
+
+    // convert all mats to single channel/bgr2gray as needed, scale to 0-1
+    for (auto& mat : vec)
+    {
+        switch (mat.channels())
+        {
+        case 1:
+            break;
+        case 3:
+            cv::cvtColor(mat, mat, cv::COLOR_RGB2GRAY, 1); // bgr2gray?
+            break;
+        case 4:
+            cv::cvtColor(mat, mat, cv::COLOR_BGRA2GRAY, 1);    // 
+            break;
+        default:
+            CV_Error(cv::Error::StsNotImplemented, "Unknown/unsupported channel count");
+        };//switch
+
+        // scale to 0-1 range
+        mat.convertTo(mat, BRISQUE_CALC_MAT_TYPE, 1. / 255.);
+    }
+    
     const brisque_svm_data* data_ptr = static_cast<const brisque_svm_data*>(this->_svm_data.get());
     return ::compute(*data_ptr, vec);
 }
