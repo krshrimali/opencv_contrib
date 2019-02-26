@@ -43,12 +43,17 @@ namespace
     using namespace cv::quality;
 
     // type of mat we're working with internally
+    //  Win32+UMat:  performance is 15-20X worse than Mat
+    //  Win32+UMat+OCL:  performance is 200-300X worse than Mat, plus accuracy errors
+    //  Linux+UMat: 15X worse performance than Linux+Mat
     using brisque_mat_type = cv::Mat;
 
     // brisque intermediate calculation type
+    //  Linux+Mat:  CV_64F is 3X slower than CV_32F
+    //  Win32+Mat:  CV_64F is 2X slower than CV_32F
     static constexpr const int BRISQUE_CALC_MAT_TYPE = CV_32F;
 
-    // brisque intermediate matrix element type
+    // brisque intermediate matrix element type.  float if BRISQUE_CALC_MAT_TYPE == CV_32F, double if BRISQUE_CALC_MAT_TYPE == CV_64F
     using brique_calc_element_type = float;
 
     // handles loading/unloading/storage of brisque svm data
@@ -94,7 +99,7 @@ namespace
             if (range_file == NULL)
                 return false;
 
-            //assume standard file format for this program	
+            //assume standard file format for this program
             CV_Assert(fgets(buff, 100, range_file) != NULL);
             CV_Assert(fgets(buff, 100, range_file) != NULL);
 
@@ -108,9 +113,6 @@ namespace
             return true;
         }
     };
-
-    uchar* get_data(const cv::Mat& mat) { return mat.data; }
-    uchar* get_data(const cv::UMat& mat) { return get_data(mat.getMat(cv::ACCESS_READ)); }
 
     template<class T> class Image {
     private:
@@ -129,8 +131,7 @@ namespace
 
         inline T* operator[](const int rowIndx) {
             // return (T*)(imgP.getMat(ACCESS_READ).data + rowIndx * imgP.step);   // UMat version
-            // return (T*)(imgP.data + rowIndx * imgP.step);    // Mat version
-            return (T*)(get_data(imgP) + rowIndx * imgP.step);
+            return (T*)(imgP.data + rowIndx * imgP.step);    // Mat version
         }
     };
 
@@ -414,10 +415,10 @@ cv::Scalar QualityBRISQUE::compute(InputArrayOfArrays imgs)
         case 1:
             break;
         case 3:
-            cv::cvtColor(mat, mat, cv::COLOR_RGB2GRAY, 1); // bgr2gray?
+            cv::cvtColor(mat, mat, cv::COLOR_RGB2GRAY, 1);
             break;
         case 4:
-            cv::cvtColor(mat, mat, cv::COLOR_BGRA2GRAY, 1);    // 
+            cv::cvtColor(mat, mat, cv::COLOR_RGBA2GRAY, 1);
             break;
         default:
             CV_Error(cv::Error::StsNotImplemented, "Unknown/unsupported channel count");

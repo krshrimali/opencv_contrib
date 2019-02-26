@@ -29,15 +29,6 @@ inline cv::Ptr<quality::QualityBRISQUE> create_brisque()
     return quality::QualityBRISQUE::create(model, range);
 }
 
-// multi-channel
-TEST(TEST_CASE_NAME, multi_channel)
-{
-    
-    quality_test(create_brisque(), get_testfile_2a(), BRISQUE_EXPECTED_2, 0, true)
-        ;
-
-}
-
 // static method
 TEST(TEST_CASE_NAME, static_ )
 {
@@ -59,6 +50,11 @@ TEST(TEST_CASE_NAME, single_channel )
     OCL_ON( fn() );
 }
 
+// multi-channel
+TEST(TEST_CASE_NAME, multi_channel)
+{
+    quality_test(create_brisque(), get_testfile_2a(), BRISQUE_EXPECTED_2, 0, true);
+}
 
 // multi-frame test
 TEST(TEST_CASE_NAME, multi_frame)
@@ -85,8 +81,9 @@ TEST(TEST_CASE_NAME, model_persistence )
 TEST(TEST_CASE_NAME, performance)
 {
     auto ref = get_testfile_1a();
+    auto alg = create_brisque();
 
-    quality_performance_test("BRISQUE", [&]() { cv::quality::QualityBRISQUE::compute(ref, cv::noArray()); });
+    quality_performance_test("BRISQUE", [&]() { alg->compute(ref); });
 }
 */
 }
